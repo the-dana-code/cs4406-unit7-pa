@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>CS4406 Unit 7 Programming Assignment</title>
+    <style>
+        body { margin: 0; }
+        canvas { display: block; }
+    </style>
+</head>
+<body>
+
+<!-- Include Three.js and OrbitControls -->
+<script src="https://cdn.jsdelivr.net/npm/three@0.94.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.94.0/examples/js/controls/OrbitControls.js"></script>
+
+<script>
+    /**
+     * ================================================
+     * Function to Graph:
+     * -----------------------------------------------
+     * Modify this function to graph a different mathematical function z = f(x, y)
+     * Examples:
+     * - Cone: (x, y) => Math.sqrt(x * x + y * y)
+     * - Hyperbolic Paraboloid: (x, y) => x * x - y * y
+     * - Saddle Surface: (x, y) => x * y
+     * ================================================
+     */
+    const functionToGraph = (x, y) => x * x - y * y;
+
+    // Create the Three.js scene where all objects will be added
+    const scene = new THREE.Scene();
+
+    // Set up the camera with perspective projection
+    const camera = new THREE.PerspectiveCamera(
+        75, // Field of view in degrees
+        window.innerWidth / window.innerHeight, // Aspect ratio
+        0.1, // Near clipping plane distance
+        1000 // Far clipping plane distance
+    );
+
+    // Set up the WebGL renderer and add it to the HTML document
+    const renderer = new THREE.WebGLRenderer();
+    renderer.setSize(window.innerWidth, window.innerHeight); // Set the size of the rendering window
+    renderer.setClearColor(0x808080); // Set the background color to a light gray
+    document.body.appendChild(renderer.domElement); // Add the rendering canvas to the document
+
+    // Add orbit controls to allow the user to rotate, zoom, and pan the scene with the mouse
+    const controls = new THREE.OrbitControls(camera, renderer.domElement);
+
+    /**
+     * Create and add axis helpers to the scene to indicate x, y, and z directions.
+     * The axes are color-coded:
+     * - Red: x-axis
+     * - Green: y-axis
+     * - Blue: z-axis
+     */
+    // Function to create an axis (line with arrow) in a given orientation
+    function createAxis(material, length, orientation) {
+        const axisRadius = 0.03;
+        const axisGeometry = new THREE.CylinderGeometry(axisRadius, axisRadius, length, 32);
+        const axis = new THREE.Mesh(axisGeometry, material);
+
+        switch (orientation) {
+            case 'x':
+                axis.rotation.z = -Math.PI / 2; // Rotate to align with x-axis
+                axis.position.set(length / 2, 0, 0); // Position along x-axis
+                break;
+            case 'y':
+                axis.position.set(0, length / 2, 0); // Position along y-axis
+                break;
+            case 'z':
+                axis.rotation.x = Math.PI / 2; // Rotate to align with z-axis
+                axis.position.set(0, 0, length / 2); // Position along z-axis
+                break;
+            default:
+                console.warn(`Unknown orientation: ${orientation}`);
+        }
+        return axis;
+    }
+
+    // Function to create an arrowhead at the end of an axis
+    function createArrow(material, length, orientation) {
+        const arrowRadius = 0.08;
+        const arrowHeight = 0.15;
+        const arrowGeometry = new THREE.ConeGeometry(arrowRadius, arrowHeight, 32);
+        const arrow = new THREE.Mesh(arrowGeometry, material);
+
+        switch (orientation) {
+            case 'x':
+                arrow.rotation.z = -Math.PI / 2; // Rotate to align with x-axis
+                arrow.position.set(length, 0, 0); // Position at the end of x-axis
+                break;
+            case 'y':
+                arrow.position.set(0, length, 0); // Position at the end of y-axis
+                break;
+            case 'z':
+                arrow.rotation.x = Math.PI / 2; // Rotate to align with z-axis
+                arrow.position.set(0, 0, length); // Position at the end of z-axis
+                break;
+            default:
+                console.warn(`Unknown orientation: ${orientation}`);
+        }
+        return arrow;
+    }
+
+    // Function to add axes and arrows to the scene
+    function addAxesAndArrows(scene, materials, length) {
+        const axes = ['x', 'y', 'z'];
+        axes.forEach(axis => {
+            const axisMesh = createAxis(materials[axis], length, axis);
+            scene.add(axisMesh);
+
+            const arrowMesh = createArrow(materials[axis], length, axis);
+            scene.add(arrowMesh);
+        });
+    }
+
+    // Materials for the axes, color-coded
+    const axisMaterials = {
+        x: new THREE.MeshBasicMaterial({ color: 0xff0000 }), // Red for x-axis
+        y: new THREE.MeshBasicMaterial({ color: 0x00ff00 }), // Green for y-axis
+        z: new THREE.MeshBasicMaterial({ color: 0x0000ff })  // Blue for z-axis
+    };
+
+    // Add axes and arrows to the scene
+    addAxesAndArrows(scene, axisMaterials, 1);
+
+    // Add a plane to the scene for reference (wireframe grid)
+    const planeGeometry = new THREE.PlaneGeometry(6, 6, 6, 6);
+    const planeMaterial = new THREE.MeshBasicMaterial({ color: 0x333333, wireframe: true });
+    const plane = new THREE.Mesh(planeGeometry, planeMaterial);
+    scene.add(plane);
+
+    /**
+     * Define the bounds and resolution for the parametric surface
+     * u and v parameters will vary from 0 to 1, which we map to our x and y ranges
+     */
+    const widthSegments = 20; // Number of segments along the width (u direction)
+    const heightSegments = 20; // Number of segments along the height (v direction)
+    const min_x = -1;
+    const max_x = 1;
+    const min_y = -1;
+    const max_y = 1;
+
+    // Parametric function that maps (u, v) in [0,1] x [0,1] to (x, y, z) in 3D space
+    const parametricFunction = (u, v, target) => {
+        const x = u * (max_x - min_x) + min_x; // Map u from [0,1] to [min_x, max_x]
+        const y = v * (max_y - min_y) + min_y; // Map v from [0,1] to [min_y, max_y]
+        const z = functionToGraph(x, y);       // Evaluate the function at (x, y)
+        target.set(x, z, y);                   // Set the vertex position
+    };
+
+    // Create the parametric geometry using the parametric function
+    const surfaceGeometry = new THREE.ParametricGeometry(parametricFunction, widthSegments, heightSegments);
+
+    /**
+     * Apply vertex colors to the geometry based on the position of each vertex.
+     * This will create a color gradient effect across the surface.
+     */
+    // Function to get a color based on the position (x, y, z)
+    function getColorFromPosition(x, y, z, bounds) {
+        const { minX, maxX, minY, maxY, minZ, maxZ } = bounds;
+        const r = (x - minX) / (maxX - minX); // Normalize x to [0,1] for red channel
+        const g = (z - minZ) / (maxZ - minZ); // Normalize z to [0,1] for green channel
+        const b = (y - minY) / (maxY - minY); // Normalize y to [0,1] for blue channel
+        return new THREE.Color(r, g, b);
+    }
+
+    // Compute the bounds of the geometry for color normalization
+    const vertices = surfaceGeometry.vertices;
+    const bounds = vertices.reduce((acc, vertex) => {
+        acc.minX = Math.min(acc.minX, vertex.x);
+        acc.maxX = Math.max(acc.maxX, vertex.x);
+        acc.minY = Math.min(acc.minY, vertex.y);
+        acc.maxY = Math.max(acc.maxY, vertex.y);
+        acc.minZ = Math.min(acc.minZ, vertex.z);
+        acc.maxZ = Math.max(acc.maxZ, vertex.z);
+        return acc;
+    }, { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity, minZ: Infinity, maxZ: -Infinity });
+
+    // Apply vertex colors to each face of the geometry
+    surfaceGeometry.faces.forEach(face => {
+        const vertexIndices = [face.a, face.b, face.c];
+        face.vertexColors = vertexIndices.map(index => {
+            const vertex = vertices[index];
+            return getColorFromPosition(vertex.x, vertex.y, vertex.z, bounds);
+        });
+    });
+
+    // Create the material for the surface mesh, using vertex colors
+    const surfaceMaterial = new THREE.MeshBasicMaterial({
+        vertexColors: THREE.VertexColors,
+        side: THREE.DoubleSide
+    });
+
+    // Create the mesh from geometry and material, and add it to the scene
+    const surfaceMesh = new THREE.Mesh(surfaceGeometry, surfaceMaterial);
+    scene.add(surfaceMesh);
+
+    // Adjust the scene and mesh orientation and scaling
+    scene.scale.set(1, 1, -1);          // Flip the z-axis to match conventional coordinate system
+    scene.rotation.x = Math.PI / 2;     // Rotate the scene to set the z-axis up
+    surfaceMesh.rotation.x = Math.PI / 2;
+    surfaceMesh.rotation.y = Math.PI / 2;
+
+    // Set up lighting in the scene
+    const ambientLight = new THREE.AmbientLight(0x404040); // Ambient light for general illumination
+    scene.add(ambientLight);
+
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8); // Directional light for shading
+    directionalLight.position.set(1, 1, 1).normalize();
+    scene.add(directionalLight);
+
+    // Position the camera so that the scene is visible
+    camera.position.set(4, 4, 4);
+    camera.lookAt(0, 0, 0);
+
+    // Animation loop to render the scene and update controls
+    function animate() {
+        requestAnimationFrame(animate);
+        controls.update(); // Update the controls for user interaction
+        renderer.render(scene, camera); // Render the scene from the perspective of the camera
+    }
+    animate();
+
+    // Handle window resize events to adjust the camera and renderer
+    window.addEventListener('resize', () => {
+        const width = window.innerWidth;
+        const height = window.innerHeight;
+        renderer.setSize(width, height); // Update renderer size
+        camera.aspect = width / height;  // Update camera aspect ratio
+        camera.updateProjectionMatrix(); // Update the camera projection matrix
+    });
+</script>
+</body>
+</html>
